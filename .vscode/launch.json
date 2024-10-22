@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        // {
+        //     "type": "node",
+        //     "request": "launch",
+        //     "name": "Launch Reader",
+        //     "skipFiles": [
+        //         "<node_internals>/**"
+        //     ],
+        //     "preLaunchTask": "npm: build - spikes",
+        //     "cwd": "${workspaceFolder}/spikes",
+        //     "program": "${workspaceFolder}/spikes/src/reader.ts",
+        //     "outFiles": [
+        //         "${workspaceFolder}/spikes/dist/src//**/*.js"
+        //     ]
+        // },
+        // {
+        //     "type": "node",
+        //     "request": "launch",
+        //     "name": "Launch Writer",
+        //     "skipFiles": [
+        //         "<node_internals>/**"
+        //     ],
+        //     "preLaunchTask": "npm: build - spikes",
+        //     "cwd": "${workspaceFolder}/spikes",
+        //     "program": "${workspaceFolder}/spikes/src/writer.ts",
+        //     "outFiles": [
+        //         "${workspaceFolder}/spikes/dist/src//**/*.js"
+        //     ]
+        // },
+        {
+            "type": "node",
+            "request": "launch",
+            "args": [
+                "--test"
+            ],
+            "name": "Debug Test",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/test/k-way-merge-tests.ts",
+            // "preLaunchTask": "npm: build",
+            "outFiles": [
+                "${workspaceFolder}/dist//**/*.js"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,52 @@
+{
+  "name": "node-toolset",
+  "version": "0.0.0",
+  "description": "A mix of common components needed for awesome node experience",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "clean-build": "rimraf ./dist && tsc",
+    "copy-files": "npx copyfiles ./package.json ./LICENSE ./README.md ./dist/",
+    "clean-prod": "rimraf ./dist/test",
+    "build": "npm run build-test && npm run clean-prod",
+    "build-test": "npm run clean-build && npx tsc && npm run copy-files",
+    "start": "npm run build && node -r dotenv/config dist/src/server.js ./.env",
+    "test": "npm run build-test && node --test ./dist/test ",
+    "docker-local": "docker build -f ./Dockerfile -t notification-hub-svc:local .",
+    "coverage": "c8 --config ./coverage-config.json npm run test",
+    "push": "npm whoami && npm version minor && npm test && npm publish && git push --tags"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LRagji/node-toolset.git"
+  },
+  "author": "Laukik",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/LRagji/node-toolset/issues"
+  },
+  "keywords": [
+    "toolset",
+    "toolbox",
+    "utilities",
+    "node",
+    "helper",
+    "Laukik"
+  ],
+  "homepage": "https://github.com/LRagji/node-toolset#readme",
+  "devDependencies": {
+    "@types/node": "^22.7.8",
+    "@types/sinon": "^17.0.3",
+    "c8": "^10.1.2",
+    "copyfiles": "^2.4.1",
+    "rimraf": "^6.0.1",
+    "sinon": "^19.0.2",
+    "typescript": "^5.6.3"
+  },
+  "files": [
+    "dist/src/**",
+    "dist/package.json",
+    "dist/LICENSE",
+    "README.md"
+  ]
+}
