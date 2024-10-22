@@ -1,4 +1,4 @@
-# StatefulProxyManager
+# Stateful Threads
 
 The idea is to provide long running stateful threads which can help with holding states like cache, file handle, iterators etc.
 

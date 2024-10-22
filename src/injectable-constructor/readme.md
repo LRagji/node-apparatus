@@ -1,4 +1,4 @@
-## InjectableConstructor Class
+## Injectable Constructor
 
 The `InjectableConstructor` class is designed to facilitate dependency injection in your application. This class allows you to define and inject dependencies through its constructor, promoting a clean, testable and modular design.
 
