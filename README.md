@@ -1,4 +1,4 @@
-# node-toolset
+# node-apparatus
 A mix of common components needed for awesome node experience
 
 <svg xmlns="http://www.w3.org/2000/svg" width="120.9" height="20" viewBox="0 0 1209 200" role="img" aria-label="license: Apache-2.0">
