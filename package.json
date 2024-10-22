@@ -2,7 +2,7 @@
   "name": "node-apparatus",
   "version": "0.1.2",
   "description": "A mix of common components needed for awesome node experience",
-  "main": "index.js",
+  "main": "dist/src/index.js",
   "type": "module",
   "scripts": {
     "clean-build": "rimraf ./dist && tsc",
