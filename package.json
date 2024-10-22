@@ -1,5 +1,5 @@
 {
-  "name": "node-toolset",
+  "name": "node-apparatus",
   "version": "0.1.0",
   "description": "A mix of common components needed for awesome node experience",
   "main": "index.js",
@@ -14,7 +14,7 @@
     "test": "npm run build-test && node --test ./dist/test ",
     "docker-local": "docker build -f ./Dockerfile -t notification-hub-svc:local .",
     "coverage": "c8 --config ./coverage-config.json npm run test",
-    "push": "npm whoami && npm version minor && npm test && npm publish && git push --tags"
+    "push": "npm whoami && npm version patch && npm test && npm publish --access=public&& git push --tags"
   },
   "repository": {
     "type": "git",
@@ -26,6 +26,7 @@
     "url": "https://github.com/LRagji/node-toolset/issues"
   },
   "keywords": [
+    "apparatus",
     "toolset",
     "toolbox",
     "utilities",
