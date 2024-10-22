@@ -26,7 +26,9 @@ A mix of common components needed for awesome node experience
 
 1. [k-way-merge](https://github.com/LRagji/node-toolset/blob/main/src/k-way-merge/readme.md)
 2. [stateful-threads](https://github.com/LRagji/node-toolset/blob/main/src/stateful-threads/readme.md)
+3. [injectable-constructor](https://github.com/LRagji/node-toolset/blob/main/src/injectable-constructor/readme.md)
 
+Many more to come
 
 ## Built with
 
