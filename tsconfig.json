@@ -7,7 +7,7 @@
     "moduleResolution": "Node",
     "declaration": true,
     "sourceMap": true,
-    "outDir": "dist",
+    "outDir": "dist/esm",
     "emitDecoratorMetadata": false,
     "skipLibCheck": true,
     "resolveJsonModule": true
