@@ -44,10 +44,7 @@
     "typescript": "^5.6.3"
   },
   "files": [
-    "dist/src/**",
-    "dist/package.json",
-    "dist/LICENSE",
-    "README.md"
+    "dist/**"
   ],
   "exports": {
     ".": {
