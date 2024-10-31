@@ -36,7 +36,7 @@ export class StatefulProxyManager {
             this.workers.push(new Worker(this.workerFilePath, { workerData: null }));
         }
         if (this.workers.length === 0) {
-            const module = await import(this.workerFilePath);
+            const module = await import(`file://${this.workerFilePath}`);
             this.selfWorker = module.default;
             this.WorkerCount = 1;
         }

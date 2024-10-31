@@ -9,20 +9,19 @@
     "clean-prod": "rimraf ./dist/test",
     "build": "npm run build-test && npm run clean-prod",
     "build-test": "npm run clean-build && npx tsc && npm run copy-files",
-    "start": "npm run build && node -r dotenv/config dist/src/server.js ./.env",
-    "test": "npm run build-test && node --test ./dist/test",
+    "test": "npm run build-test && node --test ./dist/test/**/**.js",
     "docker-local": "docker build -f ./Dockerfile -t notification-hub-svc:local .",
     "coverage": "c8 --config ./coverage-config.json npm run test",
     "push": "npm whoami && npm version patch && npm test && npm run clean-prod && npm publish && git push --tags"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/LRagji/node-toolset.git"
+    "url": "git+https://github.com/LRagji/node-apparatus.git"
   },
   "author": "Laukik",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/LRagji/node-toolset/issues"
+    "url": "https://github.com/LRagji/node-apparatus/issues"
   },
   "keywords": [
     "apparatus",
@@ -33,7 +32,7 @@
     "helper",
     "Laukik"
   ],
-  "homepage": "https://github.com/LRagji/node-toolset#readme",
+  "homepage": "https://github.com/LRagji/node-apparatus#readme",
   "devDependencies": {
     "@types/node": "^22.7.8",
     "@types/sinon": "^17.0.3",
