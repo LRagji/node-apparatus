@@ -1,7 +1,7 @@
 import assert from "node:assert";
 import { describe, it, beforeEach, test } from "node:test";
 
-import { SortedMap } from '../../src/index.js';
+import { SortedMap } from '../../src/sorted-map/sorted-map.js';
 
 describe('sorted-Mmp', () => {
     let sortedMap;
