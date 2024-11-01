@@ -1,4 +1,4 @@
-# SequentialInvocationQueue
+# Sequential Invocation Queue
 
 A utility class that ensures asynchronous functions are executed sequentially, one after the other, in the order they were added to the queue. This is useful when you need to control the order of execution of asynchronous operations to avoid race conditions or ensure data consistency.
 

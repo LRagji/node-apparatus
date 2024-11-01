@@ -1,4 +1,4 @@
-# SpinWaitLock
+# Spin Wait Lock
 
 The `SpinWaitLock` class is a custom implementation of a spin-wait lock mechanism. This class provides a lightweight synchronization primitive that repeatedly checks a condition in a loop until it is met, which can be useful in scenarios where synchronization is required without sleeping the event loop.
 
