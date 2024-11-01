@@ -45,7 +45,8 @@ export class SequentialInvocationQueue<Targs extends serializable, Treturn exten
             }
             else {
                 if (this.invocationQueue.length === 0) return { state: "error:queue-empty" };
-                const result = await this.invocationFunction(this.invocationQueue.shift());
+                const invocationParams = this.invocationQueue.shift();
+                const result = await this.invocationFunction(invocationParams);
                 return { result, state: "success" };
             }
         }
