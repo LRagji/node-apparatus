@@ -65,7 +65,7 @@ export class StatefulProxyManager {
         const workerIdx = Math.max(0, Math.min(workerIndex, this.workers.length - 1));
 
         if (workerIdx === 0 && this.selfWorker !== undefined) {
-            return this.selfWorker[methodName](...methodArguments);
+            return await this.selfWorker[methodName](...methodArguments);
         }
         else {
             const q = this.workerSequentialQueue.get(workerIdx);

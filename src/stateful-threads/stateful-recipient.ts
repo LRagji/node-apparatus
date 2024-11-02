@@ -26,19 +26,19 @@ export abstract class StatefulRecipient {
         }
     }
 
-    private receiveCommands(workMessage: Buffer) {
+    private async receiveCommands(workMessage: Buffer) {
         let methodInvocation: IProxyMethod;
         try {
             methodInvocation = deserialize(workMessage);
             if (methodInvocation.methodName === DisposeMethodPayload.methodName) {
-                this[Symbol.asyncDispose]();
+                await this[Symbol.asyncDispose]();
                 return;
             }
 
             if (this.methodNameSet.has(methodInvocation.methodName) === false) {
                 throw new Error(`Unknown method: ${methodInvocation.methodName}`);
             }
-            methodInvocation.returnValue = this[methodInvocation.methodName](...methodInvocation.methodArguments);
+            methodInvocation.returnValue = await this[methodInvocation.methodName](...methodInvocation.methodArguments);
             this.messagePort.postMessage(serialize(methodInvocation));
 
         } catch (error) {
