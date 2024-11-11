@@ -1,5 +1,6 @@
 import { InjectableConstructor } from "../injectable-constructor/injectable-constructor";
 import { SequentialInvocationQueue, Serializable } from "../sequential-invocation-queue/sequential-invocation-queue";
+import { SortedMap } from "../sorted-map/sorted-map";
 import { SpinWaitLock } from "../spin-wait-lock/spin-wait-lock";
 
 //Take care Identity of elements.
@@ -97,7 +98,6 @@ export interface IDistributedSortedSet<T> {
 export class DistributedWindowOnIdentity<T extends Serializable> {
 
     constructor(
-        private readonly name: string,
         private readonly windowSize: number,
         private readonly distributedSortedSet: IDistributedSortedSet<string>,
         private readonly distributedAccumulatorResolver: (key: string) => IAccumulator<T>,
@@ -105,12 +105,12 @@ export class DistributedWindowOnIdentity<T extends Serializable> {
 
     public async window(identity: number, payload: T): Promise<T[][] | undefined> {
         const identityBucket = identity - (identity % this.windowSize);
-        const bucketKey = `${this.name} ${identityBucket}`;
+        const bucketKey = `${identityBucket}`;
         const dw = await this.distributedWindowResolver(bucketKey);
         const results = await dw.window(payload) ?? new Array<T[]>();
         const inserted = await this.distributedSortedSet.add(bucketKey, identityBucket);// Instruction 1
         if (inserted === true) {
-            const oldBuckets = await this.distributedSortedSet.purge(identity, "lt");// Instruction 2
+            const oldBuckets = await this.distributedSortedSet.purge(identityBucket, "lt");// Instruction 2
             for (const oldBucket of oldBuckets) {
                 const dw = await this.distributedWindowResolver(oldBucket);
                 const records = await dw.flush();
@@ -138,38 +138,118 @@ export class DistributedWindowOnIdentity<T extends Serializable> {
 
 }
 
+class TestSetAcc implements IAccumulator<string> {
+    private readonly arr = new Set<string>();
+    async append(value: string | string[]): Promise<number> {
+        if (Array.isArray(value)) {
+            for (const val of value) {
+                this.arr.add(val);
+            }
+        }
+        else {
+            this.arr.add(value);
+        }
+        return this.arr.size;
+    }
+    async drain(count: number): Promise<string[]> {
+        const keys = Array.from(this.arr.values()).splice(0, count);
+        for (const key of keys) {
+            this.arr.delete(key);
+        }
+        return keys;
+    }
+    async flush(): Promise<string[]> {
+        const keys = Array.from(this.arr.values()).splice(0, this.arr.size);
+        for (const key of keys) {
+            this.arr.delete(key);
+        }
+        return keys;
+    }
+}
+
+class TestAcc implements IAccumulator<string> {
+    private readonly arr = new Array<string>();
+    async append(value: string | string[]): Promise<number> {
+        if (Array.isArray(value)) {
+            this.arr.push(...value);
+        }
+        else {
+            this.arr.push(value);
+        }
+        return this.arr.length;
+    }
+    async drain(count: number): Promise<string[]> {
+        return this.arr.splice(0, count);
+    }
+    async flush(): Promise<string[]> {
+        return this.arr.splice(0, this.arr.length);
+    }
+}
+
+class TestSortedSet implements IDistributedSortedSet<string> {
+    private readonly sortedMap = new SortedMap<number>();
+    async add(key: string, sortId: number): Promise<boolean> {
+        const inserted = !this.sortedMap.has(key);
+        this.sortedMap.set(key, sortId, sortId);
+        return inserted;
+    }
+    async purge(sortId: number, operator: "lt"): Promise<string[]> {
+        const snapshot = this.sortedMap.sort();
+        const returnKeys = new Array<string>();
+        for (const [key, value] of snapshot) {
+            if (operator === "lt" && value < sortId) {
+                returnKeys.push(key);
+                this.sortedMap.delete(key);
+            }
+        }
+        return returnKeys;
+    }
+    async flush(): Promise<string[]> {
+        const snapshot = this.sortedMap.sort();
+        const returnKeys = new Array<string>();
+        for (const [key, value] of snapshot) {
+            returnKeys.push(key);
+            this.sortedMap.delete(key);
+        }
+        return returnKeys;
+    }
+}
+
 async function main() {
-
-    const testAcc = new class implements IAccumulator<string> {
-        private readonly arr = new Set<string>();
-        async append(value: string | string[]): Promise<number> {
-            if (Array.isArray(value)) {
-                for (const val of value) {
-                    this.arr.add(val);
-                }
-            }
-            else {
-                this.arr.add(value);
-            }
-            return this.arr.size;
+    const map = new Map<string, TestAcc>();
+    const resolver = (key: string) => {
+        let acc = map.get(key);
+        if (acc === undefined) {
+            acc = new TestAcc();
+            map.set(key, acc);
         }
-        async drain(count: number): Promise<string[]> {
-            return Array.from(this.arr.values()).splice(0, count);
+        return acc;
+    };
+
+    const window = new DistributedWindowOnIdentity<string>(3000, new TestSortedSet(), resolver);
+
+    const epoch = Date.now();
+    //const epoch = 0;
+
+    const interval = setInterval(async () => {
+        // for (let index = epoch; index < 100; index++) {
+        console.log(await window.window(Date.now(), `Fired @:${Date.now() - epoch}`));
+        //console.log(`${index}: ${await window.window(index, `Fired @:${index - epoch}`)}`);
+        if (Date.now() - epoch > 10000) {
+            clearInterval(interval);
+            console.log("Cleared");
+            console.log(await window.flush());
         }
-        async flush(): Promise<string[]> {
-            return Array.from(this.arr.values()).splice(0, this.arr.size);
-        }
-    }
+        // }
+        // console.log("Cleared");
+        // console.log(await window.flush());
+    }, 500);
+    // for (let index = 0; index < 14; index++) {
+    //     console.log(`${index}: ${await window.window("A")}`);
+    // }
 
-    const window = new DistributedWindow<string>(3, testAcc);
-
-    for (let index = 0; index < 14; index++) {
-        console.log(`${index}: ${await window.window("A")}`);
-    }
-
-    console.log(await window.flush());
 }
 
 main()
     .then(() => console.log("Done"))
-    .catch(console.error);    
+    .catch(console.error);
