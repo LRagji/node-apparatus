@@ -64,6 +64,24 @@ export class SortedMap<ValueType> {
     }
 
     /**
+     * Check if a key exists in the map.
+     * @param key The key of the element.
+     * @returns True if the key exists in the map, false otherwise.
+    */
+    public has(key: string): boolean {
+        return this.map.has(key) && this.sortedKeys.has(key);
+    }
+
+    /**
+     * Delete a key from the map.
+     * @param key The key of the element.
+     * @returns True if the key was deleted, false otherwise.
+    */
+    public delete(key: string): boolean {
+        return this.map.delete(key) && this.sortedKeys.delete(key);
+    }
+
+    /**
      * Clears the map.
     */
     public clear() {
