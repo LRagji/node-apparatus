@@ -3,8 +3,15 @@ import { kWayMerge } from "./k-way-merge/k-way-merge.js";
 import { StatefulProxyManager } from "./stateful-threads/stateful-proxy-manager.js";
 import { StatefulRecipient } from "./stateful-threads/stateful-recipient.js";
 import { SortedMap } from "./sorted-map/sorted-map.js";
-import { SequentialInvocationQueue } from "./sequential-invocation-queue/sequential-invocation-queue";
-import { SpinWaitLock } from "./spin-wait-lock/spin-wait-lock";
+import { SequentialInvocationQueue, Serializable } from "./sequential-invocation-queue/sequential-invocation-queue.js";
+import { SpinWaitLock } from "./spin-wait-lock/spin-wait-lock.js";
+import { DistributedWindowIdentity } from "./distributed-window/distributed-window-identity.js";
+import { DistributedTimeWindow } from "./distributed-window/distributed-time-window.js";
+import { DistributedWindow } from "./distributed-window/distributed-window.js";
+import { IAccumulator } from "./distributed-window/i-accumulator.js";
+import { IDistributedSortedSet } from "./distributed-window/i-distributed-sorted-set.js";
+
+
 
 export {
     kWayMerge,
@@ -13,5 +20,11 @@ export {
     InjectableConstructor,
     SortedMap,
     SpinWaitLock,
-    SequentialInvocationQueue
+    SequentialInvocationQueue,
+    Serializable,
+    DistributedWindowIdentity,
+    DistributedTimeWindow,
+    DistributedWindow,
+    IAccumulator,
+    IDistributedSortedSet
 }
