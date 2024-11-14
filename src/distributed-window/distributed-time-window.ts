@@ -28,7 +28,7 @@ export class DistributedTimeWindow<T extends Serializable> {
             throw new Error("Param 'timeoutInSeconds' must be greater then 5 second");
         }
         this.dataContainer = new DistributedWindowIdentity(countWindowSize, timeoutInSeconds * 1000, distributedSortedSet, distributedAccumulatorResolver);
-        this.intervalHandle = setInterval(this.tick.bind(this), (timeoutInSeconds / 2) * 1000);
+        this.intervalHandle = setInterval(this.tick.bind(this), Math.floor(timeoutInSeconds / 2) * 1000);
     }
 
     /**
