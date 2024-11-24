@@ -30,6 +30,7 @@ A mix of common components needed for awesome node experience
 4. [sorted-map](https://github.com/LRagji/node-apparatus/blob/main/src/sorted-map/readme.md)
 5. [sequential-invocation-queue](https://github.com/LRagji/node-apparatus/blob/main/src/sequential-invocation-queue/readme.md)
 6. [spin-wait-lock](https://github.com/LRagji/node-apparatus/blob/main/src/spin-wait-lock/readme.md)
+7. [distributed-time-window](https://github.com/LRagji/node-apparatus/blob/main/src/distributed-window/readme.md)
 
 Many more to come
 

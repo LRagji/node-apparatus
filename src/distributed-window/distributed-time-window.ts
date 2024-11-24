@@ -4,7 +4,7 @@ import { IAccumulator } from "./i-accumulator.js";
 import { IDistributedSortedSet } from "./i-distributed-sorted-set.js";
 
 /**
- * A distributed window implementation that can be used to accumulate elements and drain them in a window of specific size or by absolute time window.
+ * A window-ing implementation for distributed system that can be used to accumulate elements and drain them in a window of specific size or by absolute(wall clock) time window.
  * It can be used to stead a frequency of elements from a mixed/different update rate.
  */
 export class DistributedTimeWindow<T extends Serializable> {

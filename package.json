@@ -24,6 +24,13 @@
     "url": "https://github.com/LRagji/node-apparatus/issues"
   },
   "keywords": [
+    "k-way-merge",
+    "stateful-threads",
+    "injectable-constructor",
+    "sorted-map",
+    "sequential-invocation-queue",
+    "spin-wait-lock",
+    "distributed-time-window",
     "apparatus",
     "toolset",
     "toolbox",
