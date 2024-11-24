@@ -1,8 +1,9 @@
 import { SpinWaitLock, SpinWaitLockState } from "../spin-wait-lock/spin-wait-lock";
 
-type stringable = string | string[];
-type numberable = number | number[];
-export type serializable = stringable | numberable | Record<string | number, stringable | numberable>;
+/**
+ * A type that can be serialized.
+ */
+export type Serializable = string | number | boolean | Serializable[] | { [key: string]: Serializable };
 
 export interface InvocationResult<Treturn> {
     result?: Treturn;
@@ -12,7 +13,7 @@ export interface InvocationResult<Treturn> {
 /**
  * A class that allows for the sequential invocation of a function.
  */
-export class SequentialInvocationQueue<Targs extends serializable, Treturn extends serializable | void> {
+export class SequentialInvocationQueue<Targs extends Serializable, Treturn extends Serializable | void> {
 
     private readonly invocationQueue = new Array<Targs>();
 
