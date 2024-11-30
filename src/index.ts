@@ -1,4 +1,5 @@
 import { InjectableConstructor } from "./injectable-constructor/injectable-constructor.js";
+import { kWayMergeAsync } from "./k-way-merge/k-way-merge-async.js";
 import { kWayMerge } from "./k-way-merge/k-way-merge.js";
 import { StatefulProxyManager } from "./stateful-threads/stateful-proxy-manager.js";
 import { StatefulRecipient } from "./stateful-threads/stateful-recipient.js";
@@ -14,6 +15,7 @@ import { IDistributedSortedSet } from "./distributed-window/i-distributed-sorted
 
 
 export {
+    kWayMergeAsync,
     kWayMerge,
     StatefulRecipient,
     StatefulProxyManager,
