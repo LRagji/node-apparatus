@@ -6,10 +6,24 @@ import { kWayMerge } from "../../src/k-way-merge/k-way-merge.js";
 
 describe("K-Way merging", () => {
 
-    it("Should merge distinct N array", () => {
-        const arr1 = [1, 3, 5, 7, 9];
-        const arr2 = [2, 4, 6, 8, 10];
-        const arr3 = [11, 13, 15, 17, 19];
+    async function* toAsyncIterable<T>(array: T[]): AsyncIterableIterator<T> {
+        for (const item of array) {
+            yield item;
+        }
+    }
+
+    async function asyncIterableToArray<T>(asyncIterable: AsyncIterable<T>): Promise<T[]> {
+        const result: T[] = [];
+        for await (const item of asyncIterable) {
+            result.push(item);
+        }
+        return result;
+    }
+
+    it("Should merge distinct N array", async () => {
+        const arr1 = toAsyncIterable([1, 3, 5, 7, 9]);
+        const arr2 = toAsyncIterable([2, 4, 6, 8, 10]);
+        const arr3 = toAsyncIterable([11, 13, 15, 17, 19]);
 
         const ascendingProcessFunction = (elements: (number | null)[]) => {
             let minIndex = -1;
@@ -23,15 +37,16 @@ describe("K-Way merging", () => {
             return { yieldIndex: minIndex, purgeIndexes: [] };
         }
 
-        const resultIterator = kWayMerge<number>([arr1.values(), arr2.values(), arr3.values()], ascendingProcessFunction);
+        const resultIterator = kWayMerge<number>([arr1, arr2, arr3], ascendingProcessFunction);
+        const result = await asyncIterableToArray(resultIterator);
 
-        assert.deepStrictEqual(Array.from(resultIterator), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19]);
+        assert.deepStrictEqual(result, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19]);
     });
 
-    it("Should merge N array with repeat elements", () => {
-        const arr1 = [-100, 1, 3, 5, 7, 9];
-        const arr2 = [-100, 2, 4, 6, 8, 10];
-        const arr3 = [-100, 11, 13, 15, 17, 19];
+    it("Should merge N array with repeat elements", async () => {
+        const arr1 = toAsyncIterable([-100, 1, 3, 5, 7, 9]);
+        const arr2 = toAsyncIterable([-100, 2, 4, 6, 8, 10]);
+        const arr3 = toAsyncIterable([-100, 11, 13, 15, 17, 19]);
 
         const ascendingProcessFunction = (elements: (number | null)[]) => {
             let minIndex = -1;
@@ -45,29 +60,30 @@ describe("K-Way merging", () => {
             return { yieldIndex: minIndex, purgeIndexes: [] };
         }
 
-        const resultIterator = kWayMerge<number>([arr1.values(), arr2.values(), arr3.values()], ascendingProcessFunction);
+        const resultIterator = kWayMerge<number>([arr1, arr2, arr3], ascendingProcessFunction);
+        const result = await asyncIterableToArray(resultIterator);
 
-        assert.deepStrictEqual(Array.from(resultIterator), [-100, -100, -100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19]);
+        assert.deepStrictEqual(result, [-100, -100, -100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19]);
     });
 
     it("Should exit on incorrect index returned.", () => {
-        const arr1 = [null, - 100, 1, 3, 5, 7, 9];
-        const arr2 = [-100, 2, 4, 6, 8, 10];
-        const arr3 = [-100, 11, 13, 15, 17, 19];
+        const arr1 = toAsyncIterable([null, - 100, 1, 3, 5, 7, 9]);
+        const arr2 = toAsyncIterable([-100, 2, 4, 6, 8, 10]);
+        const arr3 = toAsyncIterable([-100, 11, 13, 15, 17, 19]);
 
         const ascendingProcessFunction = (elements: (number | null)[]) => {
             return { yieldIndex: -1, purgeIndexes: [] };
         }
 
-        const resultIterator = kWayMerge<number>([arr1.values(), arr2.values(), arr3.values()], ascendingProcessFunction);
+        const resultIterator = kWayMerge<number>([arr1, arr2, arr3], ascendingProcessFunction);
 
-        assert.throws(() => Array.from(resultIterator), { message: "Frame processing was in-decisive, either it is pointing to empty iterator or incorrect value." });
+        assert.rejects(async () => await asyncIterableToArray(resultIterator), { message: "Frame processing was in-decisive, either it is pointing to empty iterator or incorrect value." });
     });
 
-    it("Should merge N array by excluding incorrect values", () => {
-        const arr1 = [-100, 1, null, 3, 5, 7, undefined, 9];
-        const arr2 = [-100, 2, null, 4, 6, 8, 10];
-        const arr3 = [Number.NaN, -100, 11, 13, 15, 17, 19];
+    it("Should merge N array by excluding incorrect values", async () => {
+        const arr1 = toAsyncIterable([-100, 1, null, 3, 5, 7, undefined, 9]);
+        const arr2 = toAsyncIterable([-100, 2, null, 4, 6, 8, 10]);
+        const arr3 = toAsyncIterable([Number.NaN, -100, 11, 13, 15, 17, 19]);
 
         const ascendingProcessFunction = (elements: (number | null)[]) => {
             let minIndex = -1;
@@ -86,9 +102,10 @@ describe("K-Way merging", () => {
             return { yieldIndex: minIndex, purgeIndexes: dropIndexes };
         }
 
-        const resultIterator = kWayMerge<number>([arr1.values(), arr2.values(), arr3.values()], ascendingProcessFunction);
+        const resultIterator = kWayMerge<number>([arr1, arr2, arr3], ascendingProcessFunction);
+        const result = await asyncIterableToArray(resultIterator);
 
-        assert.deepStrictEqual(Array.from(resultIterator), [-100, -100, -100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19]);
+        assert.deepStrictEqual(result, [-100, -100, -100, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19]);
     });
 
 });
