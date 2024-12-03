@@ -1,16 +1,3 @@
-## DistributedTimeWindow
-
-The `DistributedTimeWindow` class is designed to manage and synchronize time windows across distributed systems. This class ensures that operations within a specified time window are coordinated and consistent across different nodes in a distributed environment.
-
-### Features
-
-- **Time Window Management**: Define and manage time windows for operations.
-- **Purge on Time or Length**: Purge a window based on time or on length of accumulated elements in that window.
-- **Synchronization**: Ensure time windows are synchronized across distributed nodes.
-- **Distributed System**: Designed to be used in multi-threaded and multi-process environments.
-
-### Usage
-```typescript
 import { DistributedTimeWindow } from '../distributed-time-window.js';
 import { IAccumulator } from '../i-accumulator';
 import { IDistributedSortedSet } from '../i-distributed-sorted-set';
@@ -165,4 +152,3 @@ function tick(payloads: string[][]) {
     console.log(payloads);
     debouncer.push("Trigger Me");
 }
-```

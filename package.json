@@ -45,6 +45,7 @@
     "@types/sinon": "^17.0.3",
     "c8": "^10.1.2",
     "copyfiles": "^2.4.1",
+    "redis-abstraction": "^0.0.2",
     "rimraf": "^6.0.1",
     "sinon": "^19.0.2",
     "typescript": "^5.6.3"
