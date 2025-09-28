@@ -57,8 +57,8 @@ describe('DistributedAutoIncrementingPrimaryKey', () => {
         redisGenerateTokenMock.callThrough();
 
         const redisRunMock = stub(mockRedis, "run");
-        redisRunMock.withArgs(match(insertToken), match.array.contains(['LPOP'])).resolves([]);
-        redisRunMock.withArgs(match(insertToken), match.array.contains(['BITFIELD'])).resolves([0, 2]);
+        redisRunMock.withArgs(match(insertToken), match.array.contains(['lpop'])).resolves([]);
+        redisRunMock.withArgs(match(insertToken), match.array.contains(['bitfield'])).resolves([0, 2]);
         redisRunMock.callThrough();
 
         const redisPipelineMock = stub(mockRedis, "pipeline");
@@ -71,17 +71,16 @@ describe('DistributedAutoIncrementingPrimaryKey', () => {
         assert.strictEqual(result.inserted.get('PK1'), 'test-dictionary-0');
         assert.strictEqual(result.inserted.get('PK2'), 'test-dictionary-1');
 
-        //TODO: Validate mocks called as expected
         assert.ok(redisAcquireMock.calledOnce);
         assert.ok(redisReleaseMock.calledOnce);
         assert.ok(redisGenerateTokenMock.calledOnce);
         assert.ok(redisRunMock.calledTwice);
         assert.ok(redisPipelineMock.calledOnce);
-        assert.deepStrictEqual(redisRunMock.firstCall.args[1], ['LPOP', 'test-dictionary-refurbished', '2']);
-        assert.deepStrictEqual(redisRunMock.secondCall.args[1], ['BITFIELD', 'test-dictionary-ctr', 'GET', target.maxCapacity, '0', 'OVERFLOW', 'SAT', 'INCRBY', target.maxCapacity, '0', '2']);
+        assert.deepStrictEqual(redisRunMock.firstCall.args[1], ['lpop', 'test-dictionary-refurbished', '2']);
+        assert.deepStrictEqual(redisRunMock.secondCall.args[1], ['bitfield', 'test-dictionary-ctr', 'get', target.maxCapacity, '0', 'overflow', 'sat', 'incrby', target.maxCapacity, '0', '2']);
         assert.deepStrictEqual(redisPipelineMock.firstCall.args[1], [
-            ['HSET', 'test-dictionary-map', 'PK1', 'test-dictionary-0'],
-            ['HSET', 'test-dictionary-map', 'PK2', 'test-dictionary-1']
+            ['hsetnx', 'test-dictionary-map', 'PK1', 'test-dictionary-0'],
+            ['hsetnx', 'test-dictionary-map', 'PK2', 'test-dictionary-1']
         ]);
     });
 
@@ -103,7 +102,7 @@ describe('DistributedAutoIncrementingPrimaryKey', () => {
         redisGenerateTokenMock.callThrough();
 
         const redisRunMock = stub(mockRedis, "run");
-        redisRunMock.withArgs(match(fetchUniqueIdsToken), match.array.contains(['HMGET'])).resolves(['test-dictionary-0', 'test-dictionary-1']);
+        redisRunMock.withArgs(match(fetchUniqueIdsToken), match.array.contains(['hmget'])).resolves(['test-dictionary-0', 'test-dictionary-1']);
         redisRunMock.callThrough();
 
         const result = await target.fetchUniqueIds(['PK1', 'PK2']);
@@ -112,12 +111,12 @@ describe('DistributedAutoIncrementingPrimaryKey', () => {
         assert.strictEqual(result.found.get('PK1'), 'test-dictionary-0');
         assert.strictEqual(result.found.get('PK2'), 'test-dictionary-1');
 
-        //TODO: Validate mocks called as expected
         assert.ok(redisAcquireMock.calledOnce);
         assert.ok(redisReleaseMock.calledOnce);
         assert.ok(redisGenerateTokenMock.calledOnce);
         assert.ok(redisRunMock.calledOnce);
-        assert.deepStrictEqual(redisRunMock.firstCall.args[1], ['HMGET', 'test-dictionary-map', 'PK1', 'PK2']);
+        assert.deepStrictEqual(redisRunMock.firstCall.args[1],
+            ['hmget', 'test-dictionary-map', 'PK1', 'PK2']);
     });
 
 });

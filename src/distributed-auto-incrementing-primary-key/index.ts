@@ -9,7 +9,6 @@ export type fetchResponseType = { found: Map<primaryKeyType, uniqueIdType>, notF
 
 export class DistributedAutoIncrementingPrimaryKey {
 
-
     private readonly redisHashKey = this.redisKeyBuilder('map', this.separatorCharacter, this.identity);
     private readonly redisCounterKey = this.redisKeyBuilder('ctr', this.separatorCharacter, this.identity);
     private readonly redisRefurbishedListKey = this.redisKeyBuilder('refurbished', this.separatorCharacter, this.identity);
@@ -79,15 +78,16 @@ export class DistributedAutoIncrementingPrimaryKey {
 
             //Acquire unique ids
             let uniqueIdsRequired = existingDictionaryInsertResponse.overflow.length;
-            const uniqueIds = new Set<number>(await this.redisClient.run(token, [`LPOP`, this.redisRefurbishedListKey, uniqueIdsRequired.toString()]) as number[]);
+            const uniqueIds = new Set<number>(await this.redisClient.run(token, [`lpop`, this.redisRefurbishedListKey, uniqueIdsRequired.toString()]) as number[]);
             uniqueIdsRequired -= uniqueIds.size;
-            const freshIdRange = await this.redisClient.run(token, ['BITFIELD', this.redisCounterKey, `GET`, this.maxCapacity, `0`, `OVERFLOW`, `SAT`, `INCRBY`, this.maxCapacity, `0`, uniqueIdsRequired.toString()]) as number[];//First acquire counter space.
-            const startInclusiveId = freshIdRange[0];
-            const endExclusiveId = freshIdRange[1];
-            for (let i = startInclusiveId; i < endExclusiveId; i++) {
-                uniqueIds.add(i);
+            if (uniqueIdsRequired > 0) {
+                const freshIdRange = await this.redisClient.run(token, ['bitfield', this.redisCounterKey, `get`, this.maxCapacity, `0`, `overflow`, `sat`, `incrby`, this.maxCapacity, `0`, uniqueIdsRequired.toString()]) as number[];//First acquire counter space.
+                const startInclusiveId = freshIdRange[0];
+                const endExclusiveId = freshIdRange[1];
+                for (let i = startInclusiveId; i < endExclusiveId; i++) {
+                    uniqueIds.add(i);
+                }
             }
-
             //Create Key Value pairs
             const insertCommands = new Array<Array<string>>();
             const uniqueIdsArray = Array.from(uniqueIds);
@@ -98,12 +98,12 @@ export class DistributedAutoIncrementingPrimaryKey {
                     break;
                 }
                 /*
-                The reason to use HSET instead of HMSET is to be able to check if the field was newly inserted or already existed.
+                The reason to use HSETNX instead of HMSET is to be able to check if the field was newly inserted or already existed.
                 With HMSET, we would require an additional roundtrip to check if the field was inserted successfully with our provided key, which would be inefficient.
                 Also HEXISTS works on a per field basis, so it would not be efficient for bulk operations.
-                The best possible solution is to use HSET with pipeline, which returns 1 if the field was newly inserted and 0 if it already existed.
+                The best possible solution is to use HSETNX with pipeline, which returns 1 if the field was newly inserted and 0 if it already existed.
                 */
-                insertCommands.push(['HSET', this.redisHashKey, fieldName.toString(), fieldValue]);
+                insertCommands.push(['hsetnx', this.redisHashKey, fieldName.toString(), fieldValue]);
             }
 
             //Insert Key Value pairs
@@ -121,7 +121,7 @@ export class DistributedAutoIncrementingPrimaryKey {
 
             //Push reclaimed ids to refurbished list for future use
             if (uniqueIds.size > 0) {
-                await this.redisClient.run(token, ['LPUSH', this.redisRefurbishedListKey, ...uniqueIds.values() as unknown as string[]]);
+                await this.redisClient.run(token, ['lpush', this.redisRefurbishedListKey, ...uniqueIds.values() as unknown as string[]]);
             }
         }
         finally {
@@ -164,7 +164,7 @@ export class DistributedAutoIncrementingPrimaryKey {
         try {
             await this.redisClient.acquire(token);
             const newNotFoundPrimaryKeys = new Array<primaryKeyType>();
-            const fetchResults = await this.redisClient.run(token, ['HMGET', this.redisHashKey, ...existingDictionaryFetchResponse.notFound as string[]]) as (string | null)[];
+            const fetchResults = await this.redisClient.run(token, ['hmget', this.redisHashKey, ...existingDictionaryFetchResponse.notFound as string[]]) as (string | null)[];
             for (let i = 0; i < fetchResults.length; i++) {
                 const uniqueId = fetchResults[i];
                 const correspondingPrimaryKey = existingDictionaryFetchResponse.notFound[i];
