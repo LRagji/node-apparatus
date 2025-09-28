@@ -9,23 +9,45 @@ export type fetchResponseType = { found: Map<primaryKeyType, uniqueIdType>, notF
 
 export class DistributedAutoIncrementingPrimaryKey {
 
-    private readonly redisHashKey = `rhdict${this.separatorCharacter}map${this.separatorCharacter}${this.identity}`;
-    private readonly redisCounterKey = `rhdict${this.separatorCharacter}ctr${this.separatorCharacter}${this.identity}`;
-    private readonly redisRefurbishedListKey = `rhdict${this.separatorCharacter}refurbished${this.separatorCharacter}${this.identity}`;
 
+    private readonly redisHashKey = this.redisKeyBuilder('map', this.separatorCharacter, this.identity);
+    private readonly redisCounterKey = this.redisKeyBuilder('ctr', this.separatorCharacter, this.identity);
+    private readonly redisRefurbishedListKey = this.redisKeyBuilder('refurbished', this.separatorCharacter, this.identity);
+
+    /**
+     * Constructor for DistributedAutoIncrementingPrimaryKey
+     * @param redisConnection  Redis connection pool to be used for all operations.
+     * @param identity Unique identity for this dictionary instance. If not provided, a random UUID will be generated.
+     * @param existingDictionary Optional, existing dictionary to chain with. If provided, insert and fetch operations will first be attempted on this dictionary before falling back to the current instance. 
+     * @param separatorCharacter Optional, Character used to separate different parts of the Redis keys. Default is '-'.
+     * @param redisKeyBuilder Optional, Function to build Redis keys. If not provided, a default function will be used that incorporates the identity and separator character.
+     * @param maxCapacity Optional, Maximum capacity of the dictionary. Supported values are 'i64', 'u8', 'u16', 'u32'. Default is 'i64'.
+     * 
+     * This class provides a distributed auto-incrementing primary key dictionary using Redis as the backend.
+     * It supports chaining with an existing dictionary, allowing for hierarchical key management.
+     * The class ensures thread and multi-process safety for all operations. 
+     */
     constructor(
         private readonly redisConnection: IORedisClientPool,
         private readonly identity: string = randomUUID(),
         private readonly existingDictionary: DistributedAutoIncrementingPrimaryKey | undefined = undefined,
-        private readonly separatorCharacter: string = '-') {
+        private readonly separatorCharacter: string = '-',
+        private readonly redisKeyBuilder: (suffix: string, separatorCharacter: string, identity: string) => string = this.constructRedisKey,
+        private readonly maxCapacity: 'i64' | 'u8' | 'u16' | 'u32' = 'i64'
+    ) {
     }
+
+    private constructRedisKey(suffix: string, separatorCharacter: string, identity: string): string {
+        return `rhdict${separatorCharacter}${suffix}${this.separatorCharacter}${identity}`;
+    }
+
     /**
      *  Inserts primary keys into the distributed auto-incrementing primary key dictionary.
      *  If a primary key already exists, it will not be inserted again.
      * @param primaryKeys  Array of primary keys to insert
      * @returns An object containing a map of successfully inserted primary keys to their unique IDs and an array of primary keys that were not inserted due to overflow in dictionaries unique key capacity. 
-     * @summary
-     *  This method first checks if there is an existing dictionary to handle the insertion. If so, it delegates the insertion to that dictionary.
+     * 
+     * This method first checks if there is an existing dictionary to handle the insertion. If so, it delegates the insertion to that dictionary.
      * It then validates the primary keys to ensure they are not undefined, null, or duplicates within the same local batch.
      * It acquires a unique token from the Redis connection pool and attempts to acquire a connection.
      * It calculates the number of unique IDs required and retrieves them from a refurbished list or generates new ones using a Redis BITFIELD command.
@@ -35,7 +57,6 @@ export class DistributedAutoIncrementingPrimaryKey {
      * Finally, it releases the Redis connection and returns the result of the insertion operation.
      * This is a thread & multi-process safe operation.
      */
-
     public async insert(primaryKeys: primaryKeyType[]): Promise<insertResponseType> {
         //Invoke chaining dictionary first if any
         let existingDictionaryInsertResponse: insertResponseType = { inserted: new Map<primaryKeyType, uniqueIdType>(), overflow: primaryKeys };
@@ -77,7 +98,7 @@ export class DistributedAutoIncrementingPrimaryKey {
             let uniqueIdsRequired = existingDictionaryInsertResponse.overflow.length;
             const uniqueIds = new Set<number>(await this.redisConnection.run(token, [`LPOP`, this.redisRefurbishedListKey, uniqueIdsRequired]) as number[]);
             uniqueIdsRequired -= uniqueIds.size;
-            const freshIdRange = await this.redisConnection.run(token, ['BITFIELD', this.redisCounterKey, `GET`, `i64`, `0`, `OVERFLOW`, `SAT`, `INCRBY`, `i64`, `0`, uniqueIdsRequired]) as number[];//First acquire counter space.
+            const freshIdRange = await this.redisConnection.run(token, ['BITFIELD', this.redisCounterKey, `GET`, this.maxCapacity, `0`, `OVERFLOW`, `SAT`, `INCRBY`, this.maxCapacity, `0`, uniqueIdsRequired]) as number[];//First acquire counter space.
             const startInclusiveId = freshIdRange[0];
             const endExclusiveId = freshIdRange[1];
             for (let i = startInclusiveId; i < endExclusiveId; i++) {
@@ -86,7 +107,8 @@ export class DistributedAutoIncrementingPrimaryKey {
 
             //Create Key Value pairs
             const insertCommands = new Array<Array<string>>();
-            for (const id of uniqueIds) {
+            const uniqueIdsArray = Array.from(uniqueIds);
+            for (const id of uniqueIdsArray) {
                 const fieldValue = `${this.identity}${this.separatorCharacter}${id}`;
                 const fieldName = existingDictionaryInsertResponse.overflow.shift();
                 if (fieldName === undefined) {
@@ -101,7 +123,7 @@ export class DistributedAutoIncrementingPrimaryKey {
             for (let i = 0; i < insertResults.length; i++) {
                 if (insertResults[i] === 0) {
                     //This means the field already existed, so we need to reclaim the id
-                    const reclaimedId = uniqueIds[i];
+                    const reclaimedId = uniqueIdsArray[i];
                     if (reclaimedId !== undefined) {
                         uniqueIds.add(reclaimedId);
                     }
@@ -130,8 +152,8 @@ export class DistributedAutoIncrementingPrimaryKey {
      * 
      * @param primaryKeys Array of primary keys to fetch
      * @returns An object containing a map of found primary keys to their unique IDs and an array of primary keys that were not found in the dictionary.
-     * @summary
-     *  This method first checks if there is an existing dictionary to handle the fetch operation. If so, it delegates the fetch to that dictionary.
+     * 
+     * This method first checks if there is an existing dictionary to handle the fetch operation. If so, it delegates the fetch to that dictionary.
      * It then validates the primary keys to ensure they are not undefined, null, or duplicates within the same local batch.
      * It acquires a unique token from the Redis connection pool and attempts to acquire a connection.
      * It prepares and executes an HMGET command to fetch the unique IDs corresponding to the primary keys from a Redis hash(Global dictionary).
@@ -184,7 +206,7 @@ export class DistributedAutoIncrementingPrimaryKey {
             existingDictionaryFetchResponse.notFound = newNotFoundPrimaryKeys;
         }
         finally {
-            this.redisConnection.release(token);
+            await this.redisConnection.release(token);
         }
 
         return existingDictionaryFetchResponse;
