@@ -11,6 +11,7 @@ import { DistributedTimeWindow } from "./distributed-window/distributed-time-win
 import { DistributedWindow } from "./distributed-window/distributed-window.js";
 import { IAccumulator } from "./distributed-window/i-accumulator.js";
 import { IDistributedSortedSet } from "./distributed-window/i-distributed-sorted-set.js";
+import { DistributedAutoIncrementingPrimaryKey, primaryKeyType, uniqueIdType, insertResponseType, fetchResponseType } from "./distributed-auto-incrementing-primary-key/index.js";
 
 
 
@@ -28,5 +29,11 @@ export {
     DistributedTimeWindow,
     DistributedWindow,
     IAccumulator,
-    IDistributedSortedSet
+    IDistributedSortedSet,
+
+    DistributedAutoIncrementingPrimaryKey,
+    primaryKeyType,
+    uniqueIdType,
+    insertResponseType,
+    fetchResponseType
 }

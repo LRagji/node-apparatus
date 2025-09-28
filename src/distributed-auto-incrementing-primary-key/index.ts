@@ -1,5 +1,5 @@
 
-import { IORedisClientPool } from "redis-abstraction";
+import { IRedisClientPool } from "redis-abstraction";
 import { randomUUID } from "node:crypto";
 
 export type primaryKeyType = string | number | boolean;
@@ -16,7 +16,7 @@ export class DistributedAutoIncrementingPrimaryKey {
 
     /**
      * Constructor for DistributedAutoIncrementingPrimaryKey
-     * @param redisConnection  Redis connection pool to be used for all operations.
+     * @param redisClient  Redis connection pool to be used for all operations.
      * @param identity Unique identity for this dictionary instance. If not provided, a random UUID will be generated.
      * @param existingDictionary Optional, existing dictionary to chain with. If provided, insert and fetch operations will first be attempted on this dictionary before falling back to the current instance. 
      * @param separatorCharacter Optional, Character used to separate different parts of the Redis keys. Default is '-'.
@@ -28,17 +28,13 @@ export class DistributedAutoIncrementingPrimaryKey {
      * The class ensures thread and multi-process safety for all operations. 
      */
     constructor(
-        private readonly redisConnection: IORedisClientPool,
-        private readonly identity: string = randomUUID(),
+        private readonly redisClient: IRedisClientPool,
+        public readonly identity: string = randomUUID(),
         private readonly existingDictionary: DistributedAutoIncrementingPrimaryKey | undefined = undefined,
         private readonly separatorCharacter: string = '-',
         private readonly redisKeyBuilder: (suffix: string, separatorCharacter: string, identity: string) => string = this.constructRedisKey,
-        private readonly maxCapacity: 'i64' | 'u8' | 'u16' | 'u32' = 'i64'
+        public readonly maxCapacity: 'i64' | 'u8' | 'u16' | 'u32' = 'i64'
     ) {
-    }
-
-    private constructRedisKey(suffix: string, separatorCharacter: string, identity: string): string {
-        return `rhdict${separatorCharacter}${suffix}${this.separatorCharacter}${identity}`;
     }
 
     /**
@@ -56,6 +52,9 @@ export class DistributedAutoIncrementingPrimaryKey {
      * Any unique IDs that were not used (due to existing primary keys) are pushed back to the refurbished list for future use.
      * Finally, it releases the Redis connection and returns the result of the insertion operation.
      * This is a thread & multi-process safe operation.
+     * Best case performance: N+2 roundtrips to redis, where N is the number of unique ids required.
+     * Worst case performance:N+3 roundtrips to redis.
+     * All operations are O(1) time complexity.
      */
     public async insert(primaryKeys: primaryKeyType[]): Promise<insertResponseType> {
         //Invoke chaining dictionary first if any
@@ -65,23 +64,7 @@ export class DistributedAutoIncrementingPrimaryKey {
         }
         else {
             //Validations (only the base dictionary should do this,only once for performance reasons)
-            const filteredValues = new Array<primaryKeyType>();
-            const localDuplicates = new Set<primaryKeyType>();//Ensure no duplicates in the same batch, this helps with requesting less unique ids from redis.
-            for (const v of existingDictionaryInsertResponse.overflow) {
-                if (v !== undefined && v !== null //Check for undefined and null
-                    && (
-                        (typeof v === 'string' && v.length > 0) ||
-                        (typeof v === 'number' && !isNaN(v)) ||
-                        (typeof v === 'boolean')
-                    ) //Check for valid types
-                    && !localDuplicates.has(v)) //Check for local duplicates 
-                {
-                    filteredValues.push(v);
-                    localDuplicates.add(v);
-                }
-            }
-            localDuplicates.clear();
-            existingDictionaryInsertResponse.overflow = filteredValues;
+            existingDictionaryInsertResponse.overflow = this.validatePrimaryKeys(existingDictionaryInsertResponse.overflow);
         }
 
         //If no overflow, return(short-circuit)
@@ -90,15 +73,15 @@ export class DistributedAutoIncrementingPrimaryKey {
         }
 
         //Insertions into global dictionary
-        const token = this.redisConnection.generateUniqueToken(this.identity);
+        const token = this.redisClient.generateUniqueToken(this.identity + "insert");
         try {
-            await this.redisConnection.acquire(token);
+            await this.redisClient.acquire(token);
 
             //Acquire unique ids
             let uniqueIdsRequired = existingDictionaryInsertResponse.overflow.length;
-            const uniqueIds = new Set<number>(await this.redisConnection.run(token, [`LPOP`, this.redisRefurbishedListKey, uniqueIdsRequired]) as number[]);
+            const uniqueIds = new Set<number>(await this.redisClient.run(token, [`LPOP`, this.redisRefurbishedListKey, uniqueIdsRequired.toString()]) as number[]);
             uniqueIdsRequired -= uniqueIds.size;
-            const freshIdRange = await this.redisConnection.run(token, ['BITFIELD', this.redisCounterKey, `GET`, this.maxCapacity, `0`, `OVERFLOW`, `SAT`, `INCRBY`, this.maxCapacity, `0`, uniqueIdsRequired]) as number[];//First acquire counter space.
+            const freshIdRange = await this.redisClient.run(token, ['BITFIELD', this.redisCounterKey, `GET`, this.maxCapacity, `0`, `OVERFLOW`, `SAT`, `INCRBY`, this.maxCapacity, `0`, uniqueIdsRequired.toString()]) as number[];//First acquire counter space.
             const startInclusiveId = freshIdRange[0];
             const endExclusiveId = freshIdRange[1];
             for (let i = startInclusiveId; i < endExclusiveId; i++) {
@@ -114,35 +97,35 @@ export class DistributedAutoIncrementingPrimaryKey {
                 if (fieldName === undefined) {
                     break;
                 }
+                /*
+                The reason to use HSET instead of HMSET is to be able to check if the field was newly inserted or already existed.
+                With HMSET, we would require an additional roundtrip to check if the field was inserted successfully with our provided key, which would be inefficient.
+                Also HEXISTS works on a per field basis, so it would not be efficient for bulk operations.
+                The best possible solution is to use HSET with pipeline, which returns 1 if the field was newly inserted and 0 if it already existed.
+                */
                 insertCommands.push(['HSET', this.redisHashKey, fieldName.toString(), fieldValue]);
-                uniqueIds.delete(id);
             }
 
             //Insert Key Value pairs
-            const insertResults = await this.redisConnection.pipeline(token, insertCommands) as number[];
+            const insertResults = await this.redisClient.pipeline(token, insertCommands, false) as number[];
             for (let i = 0; i < insertResults.length; i++) {
-                if (insertResults[i] === 0) {
-                    //This means the field already existed, so we need to reclaim the id
-                    const reclaimedId = uniqueIdsArray[i];
-                    if (reclaimedId !== undefined) {
-                        uniqueIds.add(reclaimedId);
-                    }
-                }
-                else if (insertResults[i] === 1) {
-                    //This means the field was newly inserted, so we can add it to the response
+                if (insertResults[i] === 1) {
+                    //This means the field was newly inserted and was globally unique, so we can add it to the response
                     const primaryKey = insertCommands[i][2];
-                    const uniqueId = insertCommands[i][3];
-                    existingDictionaryInsertResponse.inserted.set(primaryKey, uniqueId);
+                    const fullyQualifiedUniqueId = insertCommands[i][3];
+                    existingDictionaryInsertResponse.inserted.set(primaryKey, fullyQualifiedUniqueId);
+                    const uniqueId = uniqueIdsArray[i];
+                    uniqueIds.delete(uniqueId);
                 }
             }
 
             //Push reclaimed ids to refurbished list for future use
             if (uniqueIds.size > 0) {
-                await this.redisConnection.run(token, ['LPUSH', this.redisRefurbishedListKey, ...uniqueIds.values()]);
+                await this.redisClient.run(token, ['LPUSH', this.redisRefurbishedListKey, ...uniqueIds.values() as unknown as string[]]);
             }
         }
         finally {
-            await this.redisConnection.release(token);
+            await this.redisClient.release(token);
         }
 
         return existingDictionaryInsertResponse;
@@ -157,6 +140,8 @@ export class DistributedAutoIncrementingPrimaryKey {
      * It then validates the primary keys to ensure they are not undefined, null, or duplicates within the same local batch.
      * It acquires a unique token from the Redis connection pool and attempts to acquire a connection.
      * It prepares and executes an HMGET command to fetch the unique IDs corresponding to the primary keys from a Redis hash(Global dictionary).
+     * Best and Worst case performance: 1 roundtrips to redis.
+     * All operations are O(1) time complexity.
      */
     public async fetchUniqueIds(primaryKeys: primaryKeyType[]): Promise<fetchResponseType> {
 
@@ -166,21 +151,7 @@ export class DistributedAutoIncrementingPrimaryKey {
             existingDictionaryFetchResponse = await this.existingDictionary.fetchUniqueIds(primaryKeys);
         } else {
             //Validations (only the base dictionary should do this,only once for performance reasons)
-            const filteredValues = new Array<primaryKeyType>();
-            const localDuplicates = new Set<primaryKeyType>();//Ensure no duplicates in the same batch, this helps with requesting less data from redis.
-            for (const primaryKey of existingDictionaryFetchResponse.notFound) {
-                if (primaryKey !== undefined && primaryKey !== null //Check for undefined and null
-                    && (typeof primaryKey === 'string' && primaryKey.length > 0)
-                    || (typeof primaryKey === 'number' && !isNaN(primaryKey))
-                    || typeof primaryKey === 'boolean' //Check for valid types
-                    && !localDuplicates.has(primaryKey)) //Check for local duplicates 
-                {
-                    filteredValues.push(primaryKey);
-                    localDuplicates.add(primaryKey);
-                }
-            }
-            localDuplicates.clear();
-            existingDictionaryFetchResponse.notFound = filteredValues;
+            existingDictionaryFetchResponse.notFound = this.validatePrimaryKeys(existingDictionaryFetchResponse.notFound);
         }
 
         //If no overflow, return(short-circuit)
@@ -189,11 +160,11 @@ export class DistributedAutoIncrementingPrimaryKey {
         }
 
         //Fetch from global dictionary
-        const token = this.redisConnection.generateUniqueToken(this.identity);
+        const token = this.redisClient.generateUniqueToken(this.identity + "fetchUniqueIds");
         try {
-            await this.redisConnection.acquire(token);
+            await this.redisClient.acquire(token);
             const newNotFoundPrimaryKeys = new Array<primaryKeyType>();
-            const fetchResults = await this.redisConnection.run(token, ['HMGET', this.redisHashKey, ...existingDictionaryFetchResponse.notFound]) as (string | null)[];
+            const fetchResults = await this.redisClient.run(token, ['HMGET', this.redisHashKey, ...existingDictionaryFetchResponse.notFound as string[]]) as (string | null)[];
             for (let i = 0; i < fetchResults.length; i++) {
                 const uniqueId = fetchResults[i];
                 const correspondingPrimaryKey = existingDictionaryFetchResponse.notFound[i];
@@ -206,10 +177,29 @@ export class DistributedAutoIncrementingPrimaryKey {
             existingDictionaryFetchResponse.notFound = newNotFoundPrimaryKeys;
         }
         finally {
-            await this.redisConnection.release(token);
+            await this.redisClient.release(token);
         }
 
         return existingDictionaryFetchResponse;
+    }
+
+    private constructRedisKey(suffix: string, separatorCharacter: string, identity: string): string {
+        return `${identity}${separatorCharacter}${suffix}`;
+    }
+
+    private validatePrimaryKeys(primaryKeys: primaryKeyType[]): Array<primaryKeyType> {
+        const localDuplicates = new Set<primaryKeyType>();//Ensure no duplicates in the same batch, this helps with requesting less data from redis.
+        for (const primaryKey of primaryKeys) {
+            if (primaryKey !== undefined && primaryKey !== null //Check for undefined and null
+                && (
+                    (typeof primaryKey === 'string' && primaryKey.length > 0) //Check for string with length > 0
+                    || (typeof primaryKey === 'number' && !Number.isNaN(primaryKey))//Check for valid number
+                    || typeof primaryKey === 'boolean' //Check for boolean
+                )) {
+                localDuplicates.add(primaryKey);
+            }
+        }
+        return Array.from(localDuplicates);
     }
 
 }
