@@ -1,5 +1,5 @@
 import { IORedisClientPool } from "redis-abstraction";
-import { DistributedAutoIncrementingPrimaryKey, fetchResponseType, insertResponseType, primaryKeyType } from "../index.js";
+import { DistributedAutoIncrementingPrimaryKey } from "../index.js";
 
 // Example usage of DistributedAutoIncrementingPrimaryKey
 const myIdentity = "ME";//`${process.pid}-${process.hrtime().toString()}`;

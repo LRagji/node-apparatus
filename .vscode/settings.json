@@ -4,6 +4,7 @@
         "HMGET",
         "HMSET",
         "HSET",
-        "LPUSH"
+        "LPUSH",
+        "primarykeys"
     ]
 }

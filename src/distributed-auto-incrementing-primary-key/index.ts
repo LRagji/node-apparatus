@@ -7,6 +7,7 @@ export type uniqueIdType = string;
 export type insertResponseType = { inserted: Map<primaryKeyType, uniqueIdType>, overflow: primaryKeyType[] };
 export type fetchResponseType = { found: Map<primaryKeyType, uniqueIdType>, notFound: primaryKeyType[] };
 
+// Note: This is an immutable data structure, it cannot handle updates or deletes.
 export class DistributedAutoIncrementingPrimaryKey {
 
     private readonly redisHashKey = this.redisKeyBuilder('map', this.separatorCharacter, this.identity);
@@ -32,7 +33,7 @@ export class DistributedAutoIncrementingPrimaryKey {
         private readonly existingDictionary: DistributedAutoIncrementingPrimaryKey | undefined = undefined,
         private readonly separatorCharacter: string = '-',
         private readonly redisKeyBuilder: (suffix: string, separatorCharacter: string, identity: string) => string = this.constructRedisKey,
-        public readonly maxCapacity: 'i64' | 'u8' | 'u16' | 'u32' = 'i64'
+        public readonly maxCapacity: 'i64' | 'u4' | 'u2' | 'u8' | 'u16' | 'u32' = 'i64'
     ) {
     }
 
@@ -51,8 +52,8 @@ export class DistributedAutoIncrementingPrimaryKey {
      * Any unique IDs that were not used (due to existing primary keys) are pushed back to the refurbished list for future use.
      * Finally, it releases the Redis connection and returns the result of the insertion operation.
      * This is a thread & multi-process safe operation.
-     * Best case performance: N+2 roundtrips to redis, where N is the number of unique ids required.
-     * Worst case performance:N+3 roundtrips to redis.
+     * Best case performance: N+3 roundtrips to redis, where N is the number of unique ids required.
+     * Worst case performance:N+4 roundtrips to redis.
      * All operations are O(1) time complexity.
      */
     public async insert(primaryKeys: primaryKeyType[]): Promise<insertResponseType> {
@@ -64,6 +65,17 @@ export class DistributedAutoIncrementingPrimaryKey {
         else {
             //Validations (only the base dictionary should do this,only once for performance reasons)
             existingDictionaryInsertResponse.overflow = this.validatePrimaryKeys(existingDictionaryInsertResponse.overflow);
+        }
+
+        //When overflow is non zero, membership check needs to be confirmed before we execute any commands to reduce the need of unique keys.
+        //This incurs the old Bankers algo problem for distributed systems(multi-thread-processors) where the time difference between a check(get) and set can lead to unstable system as its not atomic in nature.
+        //This wont hold true here as the assumption is this is an immutable Dictionary. So only add commands can go in and no remove commands can change sanity of it.
+        if (existingDictionaryInsertResponse.overflow.length > 0) {
+            const results = await this.fetchUniqueIds(existingDictionaryInsertResponse.overflow);
+            for (const [primaryKey, uniqueId] of results.found) {
+                existingDictionaryInsertResponse.inserted.set(primaryKey, uniqueId);
+            }
+            existingDictionaryInsertResponse.overflow = results.notFound;
         }
 
         //If no overflow, return(short-circuit)
@@ -88,6 +100,7 @@ export class DistributedAutoIncrementingPrimaryKey {
                     uniqueIds.add(i);
                 }
             }
+
             //Create Key Value pairs
             const insertCommands = new Array<Array<string>>();
             const uniqueIdsArray = Array.from(uniqueIds);
@@ -107,15 +120,17 @@ export class DistributedAutoIncrementingPrimaryKey {
             }
 
             //Insert Key Value pairs
-            const insertResults = await this.redisClient.pipeline(token, insertCommands, false) as number[];
-            for (let i = 0; i < insertResults.length; i++) {
-                if (insertResults[i] === 1) {
-                    //This means the field was newly inserted and was globally unique, so we can add it to the response
-                    const primaryKey = insertCommands[i][2];
-                    const fullyQualifiedUniqueId = insertCommands[i][3];
-                    existingDictionaryInsertResponse.inserted.set(primaryKey, fullyQualifiedUniqueId);
-                    const uniqueId = uniqueIdsArray[i];
-                    uniqueIds.delete(uniqueId);
+            if (insertCommands.length > 0) {
+                const insertResults = await this.redisClient.pipeline(token, insertCommands, false) as number[];
+                for (let i = 0; i < insertResults.length; i++) {
+                    if (insertResults[i] === 1) {
+                        //This means the field was newly inserted and was globally unique, so we can add it to the response
+                        const primaryKey = insertCommands[i][2];
+                        const fullyQualifiedUniqueId = insertCommands[i][3];
+                        existingDictionaryInsertResponse.inserted.set(primaryKey, fullyQualifiedUniqueId);
+                        const uniqueId = uniqueIdsArray[i];
+                        uniqueIds.delete(uniqueId);
+                    }
                 }
             }
 
@@ -123,6 +138,7 @@ export class DistributedAutoIncrementingPrimaryKey {
             if (uniqueIds.size > 0) {
                 await this.redisClient.run(token, ['lpush', this.redisRefurbishedListKey, ...uniqueIds.values() as unknown as string[]]);
             }
+
         }
         finally {
             await this.redisClient.release(token);
